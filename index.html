@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Try your AI receptionist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Deltacron brand: blue #1034A6, orange #F94D00 */
+    --mist: #F3F5FA;
+    --ink: #121A33;
+    --ink-soft: #4B5573;
+    --gum: #1034A6;        /* brand blue: orb, agent's voice */
+    --gum-deep: #0B2577;   /* darker blue: buttons, links */
+    --leaf: #E6ECFA;       /* light blue panels */
+    --hivis: #F94D00;      /* brand orange: accents, caller's voice */
+    --line: #D5DBEA;
+    --danger: #B42318;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --mist: #0D1224;
+      --ink: #E9EDF8;
+      --ink-soft: #A5AEC8;
+      --gum: #5B7FE6;
+      --gum-deep: #9DB2F2;
+      --leaf: #17204A;
+      --hivis: #FF6A26;
+      --line: #27304F;
+      --danger: #F0897A;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--mist);
+    color: var(--ink);
+    font-family: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-stretch: 100%;
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+  }
+  main {
+    max-width: 440px;
+    min-height: 100%;
+    margin: 0 auto;
+    padding: 28px 22px 32px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header: the business name set like signwriting on a ute door */
+  .intro { color: var(--ink-soft); font-size: 15px; }
+  .business {
+    font-stretch: 125%;
+    font-weight: 800;
+    font-size: clamp(30px, 9vw, 40px);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+    margin: 6px 0 0;
+    overflow-wrap: anywhere;
+  }
+  .business::after {
+    content: "";
+    display: block;
+    width: 56px;
+    height: 6px;
+    margin-top: 14px;
+    background: var(--hivis);
+    border-radius: 3px;
+  }
+
+  /* The orb */
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 36px 0 20px;
+    min-height: 330px;
+  }
+  .orb {
+    position: relative;
+    width: 188px;
+    height: 188px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: radial-gradient(circle at 34% 30%, #3D63D6 0%, #1034A6 48%, #0A2266 100%);
+    color: #fff;
+    font: inherit;
+    font-stretch: 112%;
+    font-weight: 700;
+    font-size: 19px;
+    box-shadow: 0 18px 40px -18px rgba(16, 52, 166, 0.55);
+    transition: transform 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .orb:active { transform: scale(0.97); }
+  .orb:focus-visible { outline: 4px solid var(--hivis); outline-offset: 6px; }
+  .orb:disabled { cursor: default; }
+  .orb::before {
+    content: "";
+    position: absolute;
+    inset: -14px;
+    border-radius: 50%;
+    border: 6px solid transparent;
+    transition: border-color 0.25s ease, transform 0.25s ease;
+  }
+  .orb .label { position: relative; z-index: 1; }
+  .orb-wrap { position: relative; width: 280px; height: 280px; display: grid; place-items: center; }
+  .orb-wrap .orb { z-index: 1; will-change: transform; }
+  #viz { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  body[data-state="live"] .orb { transition: none; }
+
+  body[data-state="connecting"] .orb { animation: breathe 1.4s ease-in-out infinite; }
+  body[data-state="live"][data-turn="user"] .orb::before { border-color: var(--hivis); }
+  body[data-state="blocked"] .orb, body[data-state="loading"] .orb, body[data-state="ended"] .orb {
+    background: var(--line);
+    color: var(--ink-soft);
+    box-shadow: none;
+  }
+
+  @keyframes breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.95); opacity: 0.8; } }
+  @keyframes speak { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+  .status {
+    margin-top: 26px;
+    min-height: 26px;
+    text-align: center;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .status.error { color: var(--danger); }
+
+  .captions {
+    width: 100%;
+    margin-top: 14px;
+    min-height: 74px;
+    font-size: 16px;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+  .captions p { margin-top: 4px; }
+  .captions .who { font-weight: 700; color: var(--ink); }
+
+  .end-btn {
+    margin-top: 14px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    border: 2px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .end-btn:focus-visible { outline: 3px solid var(--hivis); outline-offset: 3px; }
+
+  /* Suggestions */
+  .try h2 { font-size: 15px; font-weight: 600; color: var(--ink-soft); }
+  .try ul { list-style: none; padding: 0; margin-top: 8px; }
+  .try li {
+    padding: 11px 14px;
+    border-left: 4px solid var(--hivis);
+    background: var(--leaf);
+    border-radius: 0 10px 10px 0;
+    margin-top: 8px;
+    font-size: 16px;
+  }
+
+  .done {
+    padding: 16px 18px;
+    border-radius: 14px;
+    background: var(--leaf);
+  }
+  .done h2 { font-size: 19px; font-stretch: 112%; font-weight: 800; }
+  .done p { margin-top: 6px; color: var(--ink); }
+  .done .again {
+    margin-top: 12px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: none;
+    background: #1034A6;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  body:not([data-state="ended"]) .done { display: none; }
+  body[data-state="ended"] .try { display: none; }
+
+  footer {
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  footer a { color: var(--gum-deep); font-weight: 700; }
+  .mic-note { font-size: 14px; color: var(--ink-soft); text-align: center; margin-top: 10px; }
+
+  /* Lead form */
+  .lead { margin-top: 8px; }
+  .lead h2 { font-size: 22px; font-stretch: 112%; font-weight: 800; line-height: 1.15; }
+  .lead > p { margin-top: 6px; color: var(--ink-soft); }
+  .lead form { margin-top: 16px; display: grid; gap: 14px; }
+  .lead label { display: grid; gap: 5px; font-weight: 600; font-size: 15px; }
+  .lead .opt { font-weight: 400; color: var(--ink-soft); }
+  .lead input, .lead select {
+    font: inherit;
+    font-size: 16px;
+    padding: 12px 13px;
+    border-radius: 10px;
+    border: 2px solid var(--line);
+    background: var(--mist);
+    color: var(--ink);
+  }
+  @media (prefers-color-scheme: dark) { .lead input, .lead select { background: var(--mist); } }
+  .lead input:focus-visible, .lead select:focus-visible { outline: none; border-color: var(--gum); }
+  .lead .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .lead .send {
+    margin-top: 4px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: none;
+    background: #1034A6;
+    color: #fff;
+    font: inherit;
+    font-stretch: 112%;
+    font-weight: 700;
+    font-size: 17px;
+    cursor: pointer;
+  }
+  .lead .send:focus-visible { outline: 3px solid var(--hivis); outline-offset: 3px; }
+  .lead .send:disabled { opacity: 0.6; cursor: default; }
+  .lead .form-msg { min-height: 22px; font-size: 15px; color: var(--danger); }
+  .lead .thanks { padding: 16px 18px; border-radius: 14px; background: var(--leaf); }
+  .lead .thanks h2 { font-size: 19px; }
+  .lead .thanks p { margin-top: 6px; }
+  body[data-state="lead"] .lead { margin-top: 30px; }
+  body[data-state="blocked"] .stage { flex: none; min-height: 0; padding: 18px 0 0; align-items: stretch; }
+  body[data-state="blocked"] .orb-wrap,
+  body[data-state="blocked"] .captions { display: none; }
+  body[data-state="blocked"] .status { margin-top: 0; text-align: left; }
+  body[data-state="blocked"] .lead { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+  body[data-state="lead"] .stage,
+  body[data-state="lead"] .try,
+  body[data-state="lead"] .done { display: none; }
+
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb, .orb::before { transition: none; }
+    body[data-state="connecting"] .orb,
+    body[data-state="live"][data-turn="agent"] .orb { animation: none; }
+  }
+</style>
+</head>
+<body data-state="loading">
+<main>
+  <header>
+    <p class="intro" id="intro">Loading your demo</p>
+    <h1 class="business" id="business">&nbsp;</h1>
+  </header>
+
+  <section class="stage" aria-live="polite">
+    <div class="orb-wrap">
+      <canvas id="viz" aria-hidden="true"></canvas>
+      <button class="orb" id="orb" type="button" disabled>
+        <span class="label" id="orbLabel">Loading</span>
+      </button>
+    </div>
+    <p class="mic-note" id="micNote" hidden>Your browser will ask to use your microphone.</p>
+    <p class="status" id="status"></p>
+    <button class="end-btn" id="endBtn" type="button" hidden>End call</button>
+  </section>
+
+  <section class="done" id="done">
+    <h2>Check your inbox</h2>
+    <p>If you booked a job and gave your email, the confirmation has just been sent. The booking is also in the demo calendar.</p>
+    <button class="again" id="again" type="button">Call again</button>
+  </section>
+
+  <section class="try" id="try" hidden>
+    <h2>Not sure what to say? Try one of these</h2>
+    <ul id="tryList"></ul>
+  </section>
+
+  <section class="lead" id="lead" hidden>
+    <h2 id="leadTitle">Want an AI receptionist for your business?</h2>
+    <p id="leadText">Leave your details and we'll set up a free demo that answers as your business.</p>
+    <form id="leadForm" novalidate>
+      <label>Your name
+        <input name="name" autocomplete="name" required>
+      </label>
+      <label>Business name
+        <input name="business" autocomplete="organization" required>
+      </label>
+      <label>Mobile
+        <input name="mobile" type="tel" inputmode="tel" autocomplete="tel" required>
+      </label>
+      <label><span>What you do <span class="opt">(optional)</span></span>
+        <select name="trade">
+          <option value="">Choose one</option>
+          <option>Tree removal</option>
+          <option>Pest control</option>
+          <option>Mould and water damage</option>
+          <option>Roof repair</option>
+          <option>Something else</option>
+        </select>
+      </label>
+      <label><span>Email <span class="opt">(optional)</span></span>
+        <input name="email" type="email" inputmode="email" autocomplete="email">
+      </label>
+      <label><span>Suburb <span class="opt">(optional)</span></span>
+        <input name="suburb" autocomplete="address-level2">
+      </label>
+      <div class="hp" aria-hidden="true">
+        <label>Website <input name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+      <p class="form-msg" id="formMsg" role="alert"></p>
+      <button class="send" id="send" type="submit">Request demo</button>
+    </form>
+    <div class="thanks" id="thanks" hidden>
+      <h2>Thanks, we've got your details</h2>
+      <p id="thanksText"></p>
+    </div>
+  </section>
+
+  <footer id="footer" hidden></footer>
+</main>
+
+<script type="module">
+  import { RetellWebClient } from "https://cdn.jsdelivr.net/npm/retell-client-js-sdk@3.0.4/+esm";
+
+  // ---- Settings: change these three lines ----
+  const API_URL = "https://hooks.deltacrontech.com/webhook/demo";
+  const CONTACT_NAME = "Sam";                  // your friend's name
+  const CONTACT_PHONE = "+61 4xx xxx xxx";     // his number, or "" to hide
+  const LEAD_URL = "https://hooks.deltacrontech.com/webhook/lead";
+  // ---------------------------------------------
+
+  const SUGGESTIONS = {
+    tree_removal: ["A big branch just came down on my fence", "I'd like a quote to remove a gum tree", "How much do you charge?"],
+    pest_control: ["I think I've got termites", "Can someone do a pest inspection on Friday?", "Is the spray safe for my dog?"],
+    mould_water: ["There's mould spreading on my bathroom ceiling", "Water's coming through after the storm", "Do you work with insurers?"],
+    roof_repair: ["My roof is leaking in the rain right now", "Can I get a quote for a roof inspection?", "How soon can someone come out?"],
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const code = new URLSearchParams(location.search).get("c") || "";
+  const client = new RetellWebClient();
+  let demo = null;
+  let inCall = false;
+
+  const setState = (state) => { document.body.dataset.state = state; };
+  const setTurn = (turn) => { document.body.dataset.turn = turn; };
+  const setStatus = (text, isError = false) => {
+    $("status").textContent = text;
+    $("status").classList.toggle("error", isError);
+  };
+
+  async function api(action) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+      body: JSON.stringify({ action, c: code }),
+    });
+    if (!res.ok) throw new Error("Server replied " + res.status);
+    return res.json();
+  }
+
+  const REASONS = {
+    missing: "This link is missing its demo code. Check the link you were sent.",
+    not_found: "We couldn't find this demo. Check the link you were sent.",
+    expired: "This demo has ended.",
+    ended: "This demo has ended.",
+    limit: "This demo has used all its calls.",
+  };
+
+  function blocked(reason) {
+    setState("blocked");
+    $("intro").textContent = "AI receptionist demo";
+    $("business").textContent = demo?.business_name || "Demo unavailable";
+    $("orb").disabled = true;
+    $("orbLabel").textContent = "Unavailable";
+    const contact = "";
+    setStatus((REASONS[reason] || "This demo isn't available right now.") + contact, true);
+    showLead("Want to keep going?", "Leave your details and we'll be in touch to set up your receptionist.", reason);
+  }
+
+  // Lead form: shown when there's no code, or the demo can't be used
+  let leadSource = "no_code";
+  function showLead(title, text, source) {
+    leadSource = source || "no_code";
+    $("leadTitle").textContent = title;
+    $("leadText").textContent = text;
+    $("lead").hidden = false;
+  }
+
+  function landing() {
+    setState("lead");
+    $("intro").textContent = "AI receptionist for Australian trades";
+    $("business").textContent = "Never miss a job because you couldn't get to the phone";
+    showLead("Try it with your own business name",
+      "Leave your details and we'll send you a free demo that answers calls as your business.", "no_code");
+  }
+
+  $("leadForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = new FormData(ev.target);
+    const data = Object.fromEntries(f.entries());
+    const digits = String(data.mobile || "").replace(/\D/g, "");
+    if (!String(data.name || "").trim() || !String(data.business || "").trim()) {
+      $("formMsg").textContent = "Add your name and business name.";
+      return;
+    }
+    if (digits.length < 8) {
+      $("formMsg").textContent = "Add a mobile number we can call you on.";
+      return;
+    }
+    $("formMsg").textContent = "";
+    $("send").disabled = true;
+    $("send").textContent = "Sending";
+    try {
+      const res = await fetch(LEAD_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({ ...data, source: leadSource, code }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      $("leadForm").hidden = true;
+      $("thanksText").textContent = CONTACT_NAME
+        ? `${CONTACT_NAME} will call you within one business day to set up your demo.`
+        : "We'll call you within one business day to set up your demo.";
+      $("thanks").hidden = false;
+    } catch (e) {
+      $("formMsg").textContent = "Couldn't send your details. Check your connection and try again.";
+      $("send").disabled = false;
+      $("send").textContent = "Request demo";
+    }
+  });
+
+  function renderFooter() {
+    const parts = [];
+    if (demo.days_left != null) parts.push(`${demo.days_left} ${demo.days_left === 1 ? "day" : "days"} left`);
+    if (demo.calls_left != null) parts.push(`${demo.calls_left} ${demo.calls_left === 1 ? "call" : "calls"} left`);
+    let html = parts.length ? `Your demo has ${parts.join(" and ")}.` : "";
+    if (CONTACT_PHONE) html += ` Questions? Call ${CONTACT_NAME} on <a href="tel:${CONTACT_PHONE.replace(/\s/g, "")}">${CONTACT_PHONE}</a>.`;
+    $("footer").innerHTML = html;
+    $("footer").hidden = !html;
+  }
+
+  function renderReady() {
+    setState("ready");
+    const hello = demo.first_name ? `Hi ${demo.first_name}, here's the AI receptionist for` : "Here's the AI receptionist for";
+    $("intro").textContent = hello;
+    $("business").textContent = demo.business_name;
+    $("orb").disabled = false;
+    $("orbLabel").textContent = "Tap to talk";
+    $("micNote").hidden = false;
+    setStatus("Talk to it like one of your customers would.");
+    const list = SUGGESTIONS[demo.niche] || SUGGESTIONS.tree_removal;
+    $("tryList").innerHTML = "";
+    for (const s of list) { const li = document.createElement("li"); li.textContent = `“${s}”`; $("tryList").appendChild(li); }
+    $("try").hidden = false;
+    renderFooter();
+  }
+
+  async function load() {
+    if (!code) return landing();
+    try {
+      const r = await api("info");
+      demo = r;
+      if (!r.ok) return blocked(r.reason);
+      $("lead").hidden = true;
+      renderReady();
+    } catch (e) {
+      blocked("network");
+      setStatus("Couldn't load this demo. Check your connection and refresh the page.", true);
+    }
+  }
+
+  async function startCall() {
+    if (inCall) return;
+    inCall = true;
+    setState("connecting");
+    $("orb").disabled = true;
+    $("orbLabel").textContent = "Connecting";
+    $("micNote").hidden = true;
+    setStatus("Connecting you now");
+    try {
+      const r = await api("start");
+      if (!r.ok) { inCall = false; demo = { ...demo, ...r }; return blocked(r.reason); }
+      demo.calls_left = r.calls_left;
+      await client.startCall({
+        callId: r.call_id,
+        accessToken: r.access_token,
+        transport: r.transport,
+        iceServers: r.ice_servers,
+        emitRawAudioSamples: true,   // lets the orb follow the agent's voice
+      });
+    } catch (e) {
+      inCall = false;
+      const micBlocked = /permission|notallowed|denied/i.test(String(e && (e.name || e.message)));
+      renderReady();
+      setStatus(micBlocked
+        ? "Allow microphone access in your browser settings, then tap again."
+        : "The call couldn't start. Tap to try again.", true);
+    }
+  }
+
+  // ---------- Voice visualiser ----------
+  // Bars around the orb follow the agent's voice (green) and yours (yellow).
+  const canvas = $("viz");
+  const ctx = canvas.getContext("2d");
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let vizLoop = null, mic = null, smooth = new Float32Array(72), lastLabel = "";
+
+  // The agent's voice arrives as small audio snapshots from the Retell SDK.
+  // Turn each snapshot into a loudness level and a set of "bands" for the bars.
+  const agentBands = new Float32Array(36);
+  let agentLevel = 0, agentSeen = 0;
+  client.on("audio", (samples) => {
+    if (!samples || !samples.length) return;
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+    const rms = Math.sqrt(sum / samples.length);
+    agentLevel = Math.min(1, rms * 6);
+    const step = Math.max(1, Math.floor(samples.length / agentBands.length));
+    for (let b = 0; b < agentBands.length; b++) {
+      let peak = 0;
+      for (let i = b * step; i < (b + 1) * step && i < samples.length; i++) peak = Math.max(peak, Math.abs(samples[i]));
+      agentBands[b] = Math.min(1, peak * 3);
+    }
+    agentSeen = performance.now();
+  });
+
+  async function startMicMeter() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ac = new AudioContext();
+      const analyser = ac.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.6;
+      ac.createMediaStreamSource(stream).connect(analyser);
+      mic = { stream, ac, analyser };
+    } catch (e) { mic = null; }
+  }
+  function stopMicMeter() {
+    if (!mic) return;
+    mic.stream.getTracks().forEach(t => t.stop());
+    mic.ac.close();
+    mic = null;
+  }
+  function readBins(analyser) {
+    if (!analyser) return null;
+    const d = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(d);
+    return d;
+  }
+  const levelOf = (d) => { if (!d) return 0; let s = 0; for (let i = 2; i < 48; i++) s += d[i]; return s / (46 * 255); };
+
+  function sizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.round(r.width * dpr);
+    canvas.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function drawViz() {
+    // Agent: prefer the SDK's audio snapshots; fall back to its analyser if present
+    const fresh = performance.now() - agentSeen < 200;
+    if (!fresh) agentLevel *= 0.85;
+    const a = client.analyzerComponent;
+    const analyserBins = readBins(a && a.analyser);
+    let la = fresh ? agentLevel : 0;
+    if (!fresh && analyserBins) la = levelOf(analyserBins);
+    if (!fresh && !analyserBins && a && a.calculateVolume) la = Math.min(1, a.calculateVolume() * 4);
+    const userBins = readBins(mic && mic.analyser);
+    const lu = levelOf(userBins);
+    // The microphone also hears the agent through the speaker, so the agent wins ties
+    const who = la > 0.04 && la >= lu * 0.6 ? "agent" : lu > 0.06 ? "user" : "idle";
+    const level = who === "agent" ? la : who === "user" ? lu : 0;
+    const valueAt = (half, halfCount) => {
+      if (who === "agent") {
+        if (fresh) return agentBands[Math.floor((half / halfCount) * (agentBands.length - 1))] * (0.6 + la * 0.8);
+        return analyserBins ? analyserBins[2 + Math.floor((half / halfCount) * 40)] / 255 : la;
+      }
+      if (who === "user") return userBins[2 + Math.floor((half / halfCount) * 40)] / 255;
+      return 0;
+    };
+
+    const w = canvas.clientWidth, h = canvas.clientHeight, cx = w / 2, cy = h / 2;
+    ctx.clearRect(0, 0, w, h);
+    const n = smooth.length, inner = 101;
+    const css = getComputedStyle(document.documentElement);
+    const colour = who === "user" ? css.getPropertyValue("--hivis") : css.getPropertyValue("--gum");
+    const t = performance.now() / 1000;
+    ctx.lineCap = "round";
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = colour.trim() || "#1034A6";
+    for (let i = 0; i < n; i++) {
+      const half = i < n / 2 ? i : n - 1 - i;                    // mirror so the ring is symmetrical
+      let v = valueAt(half, n / 2);
+      if (who === "idle") v = 0.05 + 0.03 * Math.sin(t * 2 + i * 0.4);   // gentle "alive" ripple
+      if (reduceMotion) v = who === "idle" ? 0.05 : 0.2 + level * 0.5;
+      smooth[i] += (v - smooth[i]) * 0.35;
+      const len = 4 + smooth[i] * 34;
+      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+      ctx.globalAlpha = who === "idle" ? 0.35 : 0.9;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(ang) * inner, cy + Math.sin(ang) * inner);
+      ctx.lineTo(cx + Math.cos(ang) * (inner + len), cy + Math.sin(ang) * (inner + len));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    if (!reduceMotion) $("orb").style.transform = `scale(${1 + level * 0.12})`;
+    setTurn(who === "user" ? "user" : who === "agent" ? "agent" : "idle");
+    const label = who === "agent" ? "Speaking" : who === "user" ? "Hearing you" : "Listening";
+    if (label !== lastLabel) { $("orbLabel").textContent = label; lastLabel = label; }
+    vizLoop = requestAnimationFrame(drawViz);
+  }
+  function startViz() { if (vizLoop) return; sizeCanvas(); lastLabel = ""; drawViz(); }
+  function stopViz() {
+    if (vizLoop) cancelAnimationFrame(vizLoop);
+    vizLoop = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    $("orb").style.transform = "";
+    smooth.fill(0);
+    stopMicMeter();
+  }
+  addEventListener("resize", () => { if (vizLoop) sizeCanvas(); });
+  const stopLevel = stopViz;
+
+  client.on("call_started", async () => {
+    setState("live");
+    setTurn("idle");
+    $("orbLabel").textContent = "Listening";
+    $("endBtn").hidden = false;
+    setStatus("You're connected. Talk like a customer would.");
+    await startMicMeter();
+    startViz();
+  });
+  client.on("call_ended", () => {
+    stopLevel();
+    inCall = false;
+    setState("ended");
+    $("endBtn").hidden = true;
+    $("orbLabel").textContent = "Call ended";
+    $("orb").disabled = true;
+    setStatus("");
+    renderFooter();
+  });
+  client.on("error", () => {
+    stopLevel();
+    client.stopCall();
+    inCall = false;
+    renderReady();
+    setStatus("The call dropped. Tap to call again.", true);
+  });
+
+  $("orb").addEventListener("click", startCall);
+  $("endBtn").addEventListener("click", () => client.stopCall());
+  $("again").addEventListener("click", () => { renderReady(); startCall(); });
+
+  load();
+</script>
+</body>
+</html>
