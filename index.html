@@ -343,11 +343,18 @@
 <script type="module">
   import { RetellWebClient } from "https://cdn.jsdelivr.net/npm/retell-client-js-sdk@3.0.4/+esm";
 
-  // ---- Settings: change these three lines ----
+  /**
   const API_URL = "https://hooks.deltacrontech.com/webhook/demo";
   const CONTACT_NAME = "Sam";                  // your friend's name
   const CONTACT_PHONE = "+61 4xx xxx xxx";     // his number, or "" to hide
-  const LEAD_URL = "https://hooks.deltacrontech.com/webhook/lead";
+  const LEAD_URL = "https://hooks.deltacrontech.com/webhook/lead"; 
+  */
+
+  // ---- Settings: change these three lines ----
+  const API_URL = "https://dorathy-satiny-may.ngrok-free.dev/webhook/demo"; // n8n "demo" webhook (production URL)
+  const CONTACT_NAME = "Sam";                 // your friend's first name
+  const CONTACT_PHONE = "+61 400 000 000";    // shown at the bottom; leave "" to hide
+  const LEAD_URL = "https://dorathy-satiny-may.ngrok-free.dev/webhook/lead"; // n8n "lead" webhook (production URL)
   // ---------------------------------------------
 
   const SUGGESTIONS = {
